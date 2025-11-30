@@ -6,7 +6,6 @@ from langchain_core.prompts import PromptTemplate
 
 load_dotenv()
 
-HF_TOKEN = os.getenv("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")
 
 # OpenAI-compatible HuggingFace endpoint
 llm = ChatOpenAI(
