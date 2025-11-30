@@ -1,28 +1,115 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_core.prompts import PromptTemplate
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_chroma import Chroma
+from langchain_core.runnables import RunnableParallel, RunnableLambda, RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
-from langchain_core.prompts import PromptTemplate,load_prompt
 import os
-from langchain_pymupdf4llm import PyMuPDF4LLMLoader
 
 load_dotenv()
 
+# -----------------------------------------
+# Helper to format retrieved documents
+# -----------------------------------------
+def format_docs(retrieved_docs):
+    context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
+    return context_text
+
+
+# -----------------------------------------
+# Load LLM
+# -----------------------------------------
 model = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
 
+# -----------------------------------------
+# Prompt Template
+# -----------------------------------------
 prompt = PromptTemplate(
     template="""
-      You are a helpful assistant to chat with documents.
-      Answer ONLY from the provided context.
-      If the context is insufficient, just say you don't know.
+You are a helpful assistant that answers questions using ONLY the provided PDF context.
 
-      {context}
-      Question: {question}
-    """,
-    input_variables = ['context', 'question']
+Chat History:
+{history}
+
+Context:
+{context}
+
+Question:
+{question}
+
+If the context does NOT contain the answer, respond with:
+"I don't know based on the provided document."
+""",
+    input_variables=["context", "question", "history"]
 )
 
-file_path = "C:\\Users\\akhil\\Downloads\\pdf_chatbot\\NISM XXI A PMS Short Notes.PDF"
-loader = PyMuPDF4LLMLoader(file_path)
+# -----------------------------------------
+# Load PDF and Split Documents
+# -----------------------------------------
+file_path = "scripttt.pdf"
+loader = PyPDFLoader(file_path)
+documents = loader.load()
 
-result = model.invoke('What is the capital of India')
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1200,
+    chunk_overlap=200
+)
 
-print(result.content)
+docs = text_splitter.split_documents(documents)
+
+# -----------------------------------------
+# Embeddings + Chroma DB
+# -----------------------------------------
+embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+
+db = Chroma.from_documents(
+    docs,
+    embeddings,
+    collection_name="pdf_docs",
+    persist_directory="./chroma_db"
+)
+
+retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+
+# -----------------------------------------
+# Build RAG Chain
+# -----------------------------------------
+def build_chain(chat_history):
+    history_text = "\n".join([f"{role}: {msg}" for role, msg in chat_history])
+
+    chain_inputs = RunnableParallel({
+        "context": retriever | RunnableLambda(format_docs),
+        "question": RunnablePassthrough(),
+        "history": lambda _: history_text
+    })
+
+    parser = StrOutputParser()
+
+    return chain_inputs | prompt | model | parser
+
+
+# -----------------------------------------
+# Chat Loop
+# -----------------------------------------
+print("PDF Chatbot Ready! Type 'exit' to quit.\n")
+
+chat_history = []
+
+while True:
+    user_input = input("You: ")
+
+    if user_input.lower().strip() == "exit":
+        break
+
+    rag_chain = build_chain(chat_history)
+
+    result = rag_chain.invoke(user_input)
+
+    print("\n=== MODEL RESPONSE ===")
+    print(result)
+    print("======================\n")
+
+    chat_history.append(("User", user_input))
+    chat_history.append(("AI", result))
