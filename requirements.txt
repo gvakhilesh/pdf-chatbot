@@ -1,8 +1,26 @@
-langchain==0.2.16
-langchain-core==0.2.38
-langchain-google-genai==1.0.7
+# Core LangChain packages
+langchain
+langchain-core
 
-google-generativeai==0.7.2
-google-ai-generativelanguage==0.6.6
+# Google Gemini integration
+langchain-google-genai
+google-generativeai
 
-python-dotenv==1.0.1
+# PDF loaders
+PyPDF2
+pymupdf
+langchain-pymupdf4llm
+
+# Text splitting
+langchain-text-splitters
+
+# Vector store
+faiss-cpu
+
+# Environment variables
+python-dotenv
+# Streamlit for Web UI
+streamlit
+
+# Tokenizer for LLMs
+tiktoken

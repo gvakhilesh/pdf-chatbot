@@ -1,0 +1,12 @@
+prompt = PromptTemplate(
+    template="""
+      You are a helpful assistant to chat with documents.
+      Answer ONLY from the provided context.
+      Here is the conversation for far:
+      {history}
+      If the context is insufficient, just say you don't know.
+      {context}
+      Question: {question}
+    """,
+    input_variables = ['history','context', 'question']
+)
